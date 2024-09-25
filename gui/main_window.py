@@ -1,15 +1,14 @@
-from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QWidget
-from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QWidget, QMessageBox, QProgressDialog, QTextEdit
+from PyQt6.QtCore import pyqtSlot, Qt
 from .add_domain_dialog import AddDomainDialog
 
 class MainWindow(QMainWindow):
-    def __init__(self, config_manager, proxy_server, hosts_manager):
+    def __init__(self, config_manager, caddy_manager):
         super().__init__()
         self.config_manager = config_manager
-        self.proxy_server = proxy_server
-        self.hosts_manager = hosts_manager
-        self.setWindowTitle("Proxy Manager")
-        self.setGeometry(100, 100, 400, 300)
+        self.caddy_manager = caddy_manager
+        self.setWindowTitle("Caddy Proxy Manager")
+        self.setGeometry(100, 100, 600, 400)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -27,12 +26,26 @@ class MainWindow(QMainWindow):
         remove_button.clicked.connect(self.remove_domain)
         button_layout.addWidget(remove_button)
 
+        check_status_button = QPushButton("Check Status")
+        check_status_button.clicked.connect(self.check_status)
+        button_layout.addWidget(check_status_button)
+
         layout.addLayout(button_layout)
+
+        self.log_display = QTextEdit()
+        self.log_display.setReadOnly(True)
+        layout.addWidget(self.log_display)
 
         self.update_domain_list()
 
-        self.proxy_server.server_started.connect(self.on_server_started)
-        self.proxy_server.start()
+        self.caddy_manager.caddy_started.connect(self.on_caddy_started)
+        self.caddy_manager.caddy_stopped.connect(self.on_caddy_stopped)
+        self.caddy_manager.caddy_error.connect(self.on_caddy_error)
+        self.caddy_manager.caddy_download_progress.connect(self.on_caddy_download_progress)
+        self.caddy_manager.caddy_log.connect(self.on_caddy_log)
+        self.caddy_manager.caddy_status.connect(self.on_caddy_status)
+
+        self.download_progress_dialog = None
 
     @pyqtSlot()
     def add_domain(self):
@@ -40,8 +53,7 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             domain, target = dialog.get_input()
             self.config_manager.add_domain(domain, target)
-            self.proxy_server.add_route(domain, target)
-            self.hosts_manager.add_domain(domain)
+            self.caddy_manager.reload_caddy()
             self.update_domain_list()
 
     @pyqtSlot()
@@ -50,8 +62,7 @@ class MainWindow(QMainWindow):
         if selected_items:
             domain = selected_items[0].text().split(' -> ')[0]
             self.config_manager.remove_domain(domain)
-            self.proxy_server.remove_route(domain)
-            self.hosts_manager.remove_domain(domain)
+            self.caddy_manager.reload_caddy()
             self.update_domain_list()
 
     def update_domain_list(self):
@@ -60,11 +71,50 @@ class MainWindow(QMainWindow):
         for domain, target in domains.items():
             self.domain_list.addItem(f"{domain} -> {target}")
 
-    def closeEvent(self, event):
-        self.proxy_server.stop()
-        self.proxy_server.wait()
-        super().closeEvent(event)
+    @pyqtSlot()
+    def on_caddy_started(self):
+        self.log_display.append("Caddy has started successfully.")
 
     @pyqtSlot()
-    def on_server_started(self):
-        print("GUI notified: Server has started")
+    def on_caddy_stopped(self):
+        self.log_display.append("Caddy has stopped.")
+
+    @pyqtSlot(str)
+    def on_caddy_error(self, error_message):
+        self.log_display.append(f"Error: {error_message}")
+        QMessageBox.critical(self, "Caddy Error", error_message)
+
+    @pyqtSlot(int)
+    def on_caddy_download_progress(self, progress):
+        if self.download_progress_dialog is None:
+            self.download_progress_dialog = QProgressDialog("Downloading Caddy...", "Cancel", 0, 100, self)
+            self.download_progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.download_progress_dialog.setAutoReset(False)
+            self.download_progress_dialog.setAutoClose(False)
+            self.download_progress_dialog.show()
+
+        self.download_progress_dialog.setValue(progress)
+
+        if progress == 100:
+            self.download_progress_dialog.close()
+            self.download_progress_dialog = None
+
+    @pyqtSlot(str)
+    def on_caddy_log(self, log_message):
+        self.log_display.append(log_message)
+
+    @pyqtSlot()
+    def check_status(self):
+        self.caddy_manager.check_status()
+
+    @pyqtSlot(bool, str)
+    def on_caddy_status(self, is_running, status_message):
+        if is_running:
+            QMessageBox.information(self, "Caddy Status", status_message)
+        else:
+            QMessageBox.warning(self, "Caddy Status", status_message)
+        self.log_display.append(f"Status check: {status_message}")
+
+    def closeEvent(self, event):
+        self.caddy_manager.stop_caddy()
+        super().closeEvent(event)

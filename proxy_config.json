@@ -1,3 +1,3 @@
 {
-  "myapp.test": "http://localhost:3002/"
+  "myapp.test": "localhost:3002"
 }
