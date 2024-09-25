@@ -6,9 +6,44 @@ import requests
 import threading
 import time
 from PyQt6.QtWidgets import QApplication, QMessageBox
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal, QThread
 from gui.main_window import MainWindow
 from config_manager import ConfigManager
+
+class CaddyDownloader(QThread):
+    progress = pyqtSignal(int)
+    finished = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, url, local_path):
+        super().__init__()
+        self.url = url
+        self.local_path = local_path
+
+    def run(self):
+        try:
+            response = requests.get(self.url, stream=True)
+            response.raise_for_status()
+
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 1024  # 1 KB
+            downloaded = 0
+
+            self.progress.emit(0)  # Emit initial progress
+
+            with open(self.local_path, 'wb') as f:
+                for data in response.iter_content(block_size):
+                    f.write(data)
+                    downloaded += len(data)
+                    progress = int((downloaded / total_size) * 100)
+                    self.progress.emit(progress)
+
+            os.chmod(self.local_path, 0o755)  # Make the file executable
+            self.progress.emit(100)  # Emit final progress
+            self.finished.emit(self.local_path)
+
+        except requests.RequestException as e:
+            self.error.emit(f"Failed to download Caddy: {str(e)}")
 
 class CaddyManager(QObject):
     caddy_started = pyqtSignal()
@@ -23,21 +58,22 @@ class CaddyManager(QObject):
         self.config_manager = config_manager
         self.caddy_process = None
         self.bins_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bins')
-        self.caddy_path = self.find_or_download_caddy()
+        self.caddy_path = None
         self.log_thread = None
         self.stop_log_thread = False
 
-    def find_or_download_caddy(self):
+    def initialize(self):
         if not os.path.exists(self.bins_folder):
             os.makedirs(self.bins_folder)
 
         caddy_filename = 'caddy.exe' if platform.system() == 'Windows' else 'caddy'
-        local_caddy_path = os.path.join(self.bins_folder, caddy_filename)
+        self.caddy_path = os.path.join(self.bins_folder, caddy_filename)
 
-        if os.path.exists(local_caddy_path):
-            return local_caddy_path
-
-        return self.download_caddy()
+        if not os.path.exists(self.caddy_path):
+            self.download_caddy()
+        else:
+            self.caddy_download_progress.emit(100)
+            self.start_caddy()
 
     def download_caddy(self):
         system = platform.system().lower()
@@ -51,32 +87,17 @@ class CaddyManager(QObject):
             url = f'https://caddyserver.com/api/download?os=linux&arch={machine}'
         else:
             self.caddy_error.emit(f"Unsupported operating system: {system}")
-            return None
+            return
 
-        try:
-            response = requests.get(url, stream=True)
-            response.raise_for_status()
+        self.downloader = CaddyDownloader(url, self.caddy_path)
+        self.downloader.progress.connect(self.caddy_download_progress)
+        self.downloader.finished.connect(self.on_download_finished)
+        self.downloader.error.connect(self.caddy_error)
+        self.downloader.start()
 
-            caddy_filename = 'caddy.exe' if system == 'windows' else 'caddy'
-            local_caddy_path = os.path.join(self.bins_folder, caddy_filename)
-
-            total_size = int(response.headers.get('content-length', 0))
-            block_size = 1024  # 1 KB
-            downloaded = 0
-
-            with open(local_caddy_path, 'wb') as f:
-                for data in response.iter_content(block_size):
-                    f.write(data)
-                    downloaded += len(data)
-                    progress = int((downloaded / total_size) * 100)
-                    self.caddy_download_progress.emit(progress)
-
-            os.chmod(local_caddy_path, 0o755)  # Make the file executable
-            return local_caddy_path
-
-        except requests.RequestException as e:
-            self.caddy_error.emit(f"Failed to download Caddy: {str(e)}")
-            return None
+    def on_download_finished(self, path):
+        self.caddy_path = path
+        self.start_caddy()
 
     def generate_caddyfile(self):
         caddyfile_content = """
@@ -204,7 +225,7 @@ def main():
     window = MainWindow(config_manager, caddy_manager)
     window.show()
 
-    caddy_manager.start_caddy()
+    caddy_manager.initialize()
 
     exit_code = app.exec()
 
