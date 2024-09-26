@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 from gui.main_window import MainWindow
 from config_manager import ConfigManager
+from utils import get_data_dir
 
 class CaddyDownloader(QThread):
     progress = pyqtSignal(int)
@@ -57,7 +58,8 @@ class CaddyManager(QObject):
         super().__init__()
         self.config_manager = config_manager
         self.caddy_process = None
-        self.bins_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bins')
+        self.data_dir = get_data_dir()
+        self.bins_folder = os.path.join(self.data_dir, 'bins')
         self.caddy_path = None
         self.log_thread = None
         self.stop_log_thread = False
@@ -109,11 +111,11 @@ class CaddyManager(QObject):
         for domain, target in self.config_manager.get_domains().items():
             caddyfile_content += f"""
 {domain} {{
-            tls internal
+    tls internal
     reverse_proxy {target}
 }}
 """
-        caddyfile_path = os.path.join(self.bins_folder, 'Caddyfile')
+        caddyfile_path = os.path.join(self.data_dir, 'Caddyfile')
         with open(caddyfile_path, 'w') as f:
             f.write(caddyfile_content)
         return caddyfile_path
@@ -206,27 +208,26 @@ class CaddyManager(QObject):
         # If we've tried all domains and none worked
         self.caddy_status.emit(False, "Caddy is running but not responding to any configured domains")
 
-def is_admin():
-    try:
-        return os.getuid() == 0
-    except AttributeError:
-        import ctypes
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
-
 def main():
-    if not is_admin():
-        QMessageBox.critical(None, "Error", "This application needs to be run with administrator privileges.")
-        return
-
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Prevent app from quitting when main window is closed
-    config_manager = ConfigManager()
-    caddy_manager = CaddyManager(config_manager)
+
+    try:
+        data_dir = get_data_dir()
+        config_manager = ConfigManager()
+        caddy_manager = CaddyManager(config_manager)
+    except OSError as e:
+        QMessageBox.critical(None, "Error", f"Failed to create necessary directories: {str(e)}")
+        return
 
     window = MainWindow(config_manager, caddy_manager)
     window.hide()  # Start with the main window hidden
 
-    caddy_manager.initialize()
+    try:
+        caddy_manager.initialize()
+    except Exception as e:
+        QMessageBox.critical(None, "Error", f"Failed to initialize Caddy: {str(e)}")
+        return
 
     exit_code = app.exec()
 

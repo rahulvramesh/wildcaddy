@@ -6,11 +6,11 @@ process_file() {
     local indent="$2"
 
     # Skip .lock files
-    if [[ "${file##*.}" == "lock" ]]; then
+    if [[ "${file##*.}" == "lock" ]] ||  [[ "${file##*.}" == "sh" ]] ||  [[ "${file##*.}" == "icns" ]]; then
         return
     fi
 
-    # Print file path
+    # Print file path icns
     echo "${indent}File: $file"
 
     # Print file content with additional indentation

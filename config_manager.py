@@ -1,8 +1,11 @@
 import json
+import os
+from utils import get_data_dir
 
 class ConfigManager:
-    def __init__(self, config_file='proxy_config.json'):
-        self.config_file = config_file
+    def __init__(self):
+        self.data_dir = get_data_dir()
+        self.config_file = os.path.join(self.data_dir, 'proxy_config.json')
         self.load_config()
 
     def load_config(self):
