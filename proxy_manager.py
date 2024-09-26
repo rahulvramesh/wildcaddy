@@ -156,17 +156,28 @@ class CaddyManager(QObject):
 
     def stop_caddy(self):
         if self.caddy_process:
+            print("Stopping Caddy process...")  # Debug information
             self.stop_log_thread = True
+            
+            # Wait for the log thread to finish
             if self.log_thread:
-                self.log_thread.join()
-            self.caddy_process.terminate()
-            self.caddy_process.wait()
+                print("Waiting for log thread to finish...")  # Debug information
+                self.log_thread.join(timeout=5)  # Set a timeout of 5 seconds
+                
+            print("Terminating Caddy process...")  # Debug information
+            self.caddy_process.terminate()  # Terminate the Caddy process
+            self.caddy_process.wait()  # Wait for the process to exit
+            print("Caddy process terminated.")  # Debug information
             self.caddy_process = None
             self.caddy_stopped.emit()
 
+
     def reload_caddy(self):
-        self.stop_caddy()
-        self.start_caddy()
+        try:
+            self.stop_caddy()
+            self.start_caddy()
+        except Exception as e:
+            self.caddy_error.emit(f"Failed to reload Caddy: {str(e)}")
 
     def start_log_thread(self):
         self.stop_log_thread = False
@@ -174,13 +185,23 @@ class CaddyManager(QObject):
         self.log_thread.start()
 
     def log_output(self):
-        while not self.stop_log_thread and self.caddy_process:
-            output = self.caddy_process.stdout.readline()
-            if output:
-                self.caddy_log.emit(output.strip())
-            error = self.caddy_process.stderr.readline()
-            if error:
-                self.caddy_log.emit(f"ERROR: {error.strip()}")
+        while not self.stop_log_thread:
+            if self.caddy_process is not None:
+                output = self.caddy_process.stdout.readline()
+                if output:  # Check if there is output
+                    self.caddy_log.emit(output.strip())
+
+                # Only read from stderr if the process is still running
+                if self.caddy_process.poll() is None:
+                    error = self.caddy_process.stderr.readline()
+                    if error:  # Check if there is an error
+                        self.caddy_log.emit(f"ERROR: {error.strip()}")
+                else:
+                    break  # Exit if the process has terminated
+            else:
+                break  # Exit if the process is None
+
+
 
     def check_status(self):
         if not self.caddy_process:

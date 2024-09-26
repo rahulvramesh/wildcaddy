@@ -177,7 +177,7 @@ class MainWindow(QMainWindow):
             self.config_manager.add_domain(domain, target)
             logging.debug(f"Domain '{domain}' added to the configuration.")
             
-            self.hosts_manager.add_domain(domain)
+            #self.hosts_manager.add_domain(domain)
             logging.debug(f"Domain '{domain}' added to the host.")
             
             self.caddy_manager.reload_caddy()
@@ -190,7 +190,7 @@ class MainWindow(QMainWindow):
         if selected_items:
             domain = selected_items[0].text().split(' -> ')[0]
             self.config_manager.remove_domain(domain)
-            self.hosts_manager.remove_domain(domain)
+            #self.hosts_manager.remove_domain(domain)
             self.caddy_manager.reload_caddy()
             self.update_domain_list()
 
@@ -256,6 +256,7 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def restart_caddy(self):
         """Restart the Caddy server."""
+        logging.debug("Restarting Caddy...")
         self.caddy_manager.reload_caddy()
         self.log_display.append("Restarting Caddy...")
         self.status_bar_app.show_message("Wild Caddy", "Caddy server restarted")

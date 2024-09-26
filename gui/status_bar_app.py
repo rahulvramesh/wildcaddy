@@ -9,7 +9,7 @@ class StatusBarApp(QObject):
     def __init__(self, icon):
         super().__init__()
         self.icon = icon
-        self.tray_icon = None
+        self.tray_icon = icon
         self.create_tray_icon()
 
     def create_tray_icon(self):
