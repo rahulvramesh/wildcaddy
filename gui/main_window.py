@@ -1,13 +1,62 @@
-from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QWidget, QMessageBox, QProgressDialog, QTextEdit, QLabel
+import os
+
+from PyQt6.QtWidgets import (
+    QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QWidget,
+    QMessageBox, QProgressDialog, QTextEdit, QLabel, QMenu, QMenuBar, QDialog,
+    QVBoxLayout, QLabel, QTextBrowser
+)
 from PyQt6.QtCore import pyqtSlot, Qt
+from PyQt6.QtGui import QAction, QIcon
+from .add_domain_dialog import AddDomainDialog
+from .status_bar_app import StatusBarApp
+
+class AboutDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("About Wild Caddy")
+        self.setFixedSize(400, 300)
+
+        layout = QVBoxLayout()
+
+        title = QLabel("Wild Caddy")
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(title)
+
+        version = QLabel("Version 1.0")
+        layout.addWidget(version)
+
+        description = QTextBrowser()
+        description.setHtml("""
+        <p>Wild Caddy is a user-friendly GUI application for managing Caddy server as a reverse proxy.</p>
+        <p>Features:</p>
+        <ul>
+            <li>Easy domain management</li>
+            <li>Automatic HTTPS with Let's Encrypt</li>
+            <li>Real-time log viewing</li>
+            <li>Caddy server status monitoring</li>
+            <li>macOS menu bar integration</li>
+        </ul>
+        <p>Created by Your Name</p>
+        <p>Licensed under MIT License</p>
+        """)
+        layout.addWidget(description)
+
+        self.setLayout(layout)
 
 class MainWindow(QMainWindow):
     def __init__(self, config_manager, caddy_manager):
         super().__init__()
         self.config_manager = config_manager
         self.caddy_manager = caddy_manager
-        self.setWindowTitle("Caddy Proxy Manager")
+        self.setWindowTitle("Wild Caddy")
         self.setGeometry(100, 100, 600, 400)
+
+        self.app_icon = self.load_app_icon()
+        self.setWindowIcon(self.app_icon)
+
+
+        self.create_menu_bar()
+        self.create_status_bar_app()
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -51,6 +100,65 @@ class MainWindow(QMainWindow):
         self.caddy_manager.caddy_status.connect(self.on_caddy_status)
 
         self.download_progress_dialog = None
+
+    def load_app_icon(self):
+        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'resources', 'wild_caddy_icon.png'))
+        return QIcon(icon_path)
+
+    def create_menu_bar(self):
+        """Create and set up the menu bar."""
+        menu_bar = QMenuBar(self)
+        self.setMenuBar(menu_bar)
+
+        # File menu
+        file_menu = QMenu("File", self)
+        menu_bar.addMenu(file_menu)
+
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        # Domain menu
+        domain_menu = QMenu("Domain", self)
+        menu_bar.addMenu(domain_menu)
+
+        add_domain_action = QAction("Add Domain", self)
+        add_domain_action.triggered.connect(self.add_domain)
+        domain_menu.addAction(add_domain_action)
+
+        remove_domain_action = QAction("Remove Domain", self)
+        remove_domain_action.triggered.connect(self.remove_domain)
+        domain_menu.addAction(remove_domain_action)
+
+        # Caddy menu
+        caddy_menu = QMenu("Caddy", self)
+        menu_bar.addMenu(caddy_menu)
+
+        check_status_action = QAction("Check Status", self)
+        check_status_action.triggered.connect(self.check_status)
+        caddy_menu.addAction(check_status_action)
+
+        restart_caddy_action = QAction("Restart Caddy", self)
+        restart_caddy_action.triggered.connect(self.restart_caddy)
+        caddy_menu.addAction(restart_caddy_action)
+
+        # Help menu
+        help_menu = QMenu("Help", self)
+        menu_bar.addMenu(help_menu)
+
+        about_action = QAction("About", self)
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
+
+    def create_status_bar_app(self):
+        self.status_bar_app = StatusBarApp(self.app_icon)
+        self.status_bar_app.open_main_window.connect(self.show)
+        self.status_bar_app.restart_caddy.connect(self.restart_caddy)
+
+
+        # Set the window icon
+        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'resources', 'wild_caddy_icon.png'))
+        self.setWindowIcon(QIcon(icon_path))
 
     @pyqtSlot()
     def add_domain(self):
@@ -129,6 +237,20 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Caddy Status", status_message)
         self.log_display.append(f"Status check: {status_message}")
 
+    @pyqtSlot()
+    def restart_caddy(self):
+        """Restart the Caddy server."""
+        self.caddy_manager.reload_caddy()
+        self.log_display.append("Restarting Caddy...")
+        self.status_bar_app.show_message("Wild Caddy", "Caddy server restarted")
+
+    @pyqtSlot()
+    def show_about_dialog(self):
+        """Show the About dialog."""
+        about_dialog = AboutDialog(self)
+        about_dialog.exec()
+
     def closeEvent(self, event):
-        self.caddy_manager.stop_caddy()
-        super().closeEvent(event)
+        event.ignore()
+        self.hide()
+        self.status_bar_app.show_message("Wild Caddy", "Application minimized to menu bar")

@@ -109,7 +109,7 @@ class CaddyManager(QObject):
         for domain, target in self.config_manager.get_domains().items():
             caddyfile_content += f"""
 {domain} {{
-    tls internal
+            tls internal
     reverse_proxy {target}
 }}
 """
@@ -219,11 +219,12 @@ def main():
         return
 
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)  # Prevent app from quitting when main window is closed
     config_manager = ConfigManager()
     caddy_manager = CaddyManager(config_manager)
 
     window = MainWindow(config_manager, caddy_manager)
-    window.show()
+    window.hide()  # Start with the main window hidden
 
     caddy_manager.initialize()
 
