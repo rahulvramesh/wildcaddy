@@ -50,10 +50,11 @@ class AboutDialog(QDialog):
         self.setLayout(layout)
 
 class MainWindow(QMainWindow):
-    def __init__(self, config_manager, caddy_manager):
+    def __init__(self, config_manager, caddy_manager,hosts_manager):
         super().__init__()
         self.config_manager = config_manager
         self.caddy_manager = caddy_manager
+        self.hosts_manager = hosts_manager
         self.setWindowTitle("Wild Caddy")
         self.setGeometry(100, 100, 600, 400)
 
@@ -175,6 +176,10 @@ class MainWindow(QMainWindow):
             logging.debug(f"Received input: domain='{domain}', target='{target}'")
             self.config_manager.add_domain(domain, target)
             logging.debug(f"Domain '{domain}' added to the configuration.")
+            
+            self.hosts_manager.add_domain(domain)
+            logging.debug(f"Domain '{domain}' added to the host.")
+            
             self.caddy_manager.reload_caddy()
             logging.debug("Caddy reloaded.")
             self.update_domain_list()
@@ -185,6 +190,7 @@ class MainWindow(QMainWindow):
         if selected_items:
             domain = selected_items[0].text().split(' -> ')[0]
             self.config_manager.remove_domain(domain)
+            self.hosts_manager.remove_domain(domain)
             self.caddy_manager.reload_caddy()
             self.update_domain_list()
 

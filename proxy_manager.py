@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 from gui.main_window import MainWindow
 from config_manager import ConfigManager
+from hosts_manager import HostsManager
 from utils import get_data_dir
 
 class CaddyDownloader(QThread):
@@ -219,11 +220,12 @@ def main():
         data_dir = get_data_dir()
         config_manager = ConfigManager()
         caddy_manager = CaddyManager(config_manager)
+        hosts_manager = HostsManager()
     except OSError as e:
         QMessageBox.critical(None, "Error", f"Failed to create necessary directories: {str(e)}")
         return
 
-    window = MainWindow(config_manager, caddy_manager)
+    window = MainWindow(config_manager, caddy_manager, hosts_manager)
 
     def show_window():
         window.show()

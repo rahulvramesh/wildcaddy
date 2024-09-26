@@ -7,3 +7,4 @@ generate_folder_structure.sh
 WildCaddy.spec
 build
 dist
+gui/__pycache__/
