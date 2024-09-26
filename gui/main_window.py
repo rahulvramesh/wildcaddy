@@ -1,3 +1,4 @@
+import logging
 import os
 
 from PyQt6.QtWidgets import (
@@ -9,6 +10,11 @@ from PyQt6.QtCore import pyqtSlot, Qt
 from PyQt6.QtGui import QAction, QIcon
 from .add_domain_dialog import AddDomainDialog
 from .status_bar_app import StatusBarApp
+
+logging.basicConfig(
+    level=logging.DEBUG,  # Set the logging level
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Log format
+)
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
@@ -36,7 +42,7 @@ class AboutDialog(QDialog):
             <li>Caddy server status monitoring</li>
             <li>macOS menu bar integration</li>
         </ul>
-        <p>Created by Your Name</p>
+        <p>Created by RahulVR</p>
         <p>Licensed under MIT License</p>
         """)
         layout.addWidget(description)
@@ -165,8 +171,12 @@ class MainWindow(QMainWindow):
         dialog = AddDomainDialog(self)
         if dialog.exec():
             domain, target = dialog.get_input()
+
+            logging.debug(f"Received input: domain='{domain}', target='{target}'")
             self.config_manager.add_domain(domain, target)
+            logging.debug(f"Domain '{domain}' added to the configuration.")
             self.caddy_manager.reload_caddy()
+            logging.debug("Caddy reloaded.")
             self.update_domain_list()
 
     @pyqtSlot()

@@ -53,6 +53,7 @@ class CaddyManager(QObject):
     caddy_download_progress = pyqtSignal(int)
     caddy_log = pyqtSignal(str)
     caddy_status = pyqtSignal(bool, str)
+    initialization_complete = pyqtSignal()  # New signal for initialization completion
 
     def __init__(self, config_manager):
         super().__init__()
@@ -149,6 +150,8 @@ class CaddyManager(QObject):
                 self.start_log_thread()
         except subprocess.SubprocessError as e:
             self.caddy_error.emit(f"Failed to start Caddy: {str(e)}")
+        finally:
+            self.initialization_complete.emit()  # Signal that initialization is complete
 
     def stop_caddy(self):
         if self.caddy_process:
@@ -221,7 +224,12 @@ def main():
         return
 
     window = MainWindow(config_manager, caddy_manager)
-    window.hide()  # Start with the main window hidden
+
+    def show_window():
+        window.show()
+        window.activateWindow()  # Bring the window to the front
+
+    caddy_manager.initialization_complete.connect(show_window)
 
     try:
         caddy_manager.initialize()
